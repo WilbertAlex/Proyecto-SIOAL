@@ -17,7 +17,7 @@ import pandas as pd
 
 BASE = Path(__file__).resolve().parent
 sys.path.insert(0, str(BASE))
-from src.datos_reales import leer_excels, limpiar  # noqa: E402
+from src.fuente import diario  # noqa: E402
 from src.vectorial import pronosticos  # noqa: E402
 
 DIAS = ['lun', 'mar', 'mié', 'jue', 'vie', 'sáb', 'dom']
@@ -25,14 +25,13 @@ PRIMERA, ULTIMA = '2026-08-03', '2026-11-09'      # semanas completas de la expo
 
 
 def main():
-    c, _ = leer_excels(BASE.parent / 'Datos')       # solo la carpeta de exportaciones reales
-    d = limpiar(c)
-    v = d[~d.excluir_regla_app].copy()
+    v, origen = diario()                            # Excel en ../Datos o, si no están, datos_publicos/
+    print('Datos:', origen)
     v['semana'] = v.fecha.dt.to_period('W-SUN').dt.start_time
     v['dia'] = v.fecha.dt.dayofweek
     filas = []
     for var in ['kg', 'viajes']:
-        v['valor'] = v.kg if var == 'kg' else 1
+        v['valor'] = v[var]
         tab = (v.pivot_table(index='semana', columns='dia', values='valor', aggfunc='sum', fill_value=0)
                 .reindex(columns=range(7), fill_value=0).loc[PRIMERA:ULTIMA])
         tot = tab.sum(1).to_numpy(float)

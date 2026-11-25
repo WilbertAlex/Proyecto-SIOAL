@@ -10,7 +10,7 @@ Salida:  resultados/caso_real/wape_caso_real.csv
 from pathlib import Path
 import numpy as np
 import pandas as pd
-from src.datos_reales import agregar_semanal, leer_excels, limpiar
+from src.fuente import semanal
 from src.vectorial import pronosticos, seleccion_app
 
 BASE = Path(__file__).resolve().parent
@@ -24,9 +24,9 @@ def wape(y, f):
 
 
 def main():
-    # Semanas completas de las exportaciones reales de TITANICSOFT que estén en ../Datos
-    crudo, _ = leer_excels(BASE.parent / 'Datos')
-    sem = agregar_semanal(limpiar(crudo), excluir_col='excluir_regla_app')
+    # Semanas completas de las exportaciones reales (Excel en ../Datos o, si no están, datos_publicos/)
+    sem, origen = semanal()
+    print('Datos:', origen)
     d = sem[(sem.semana >= '2026-08-03') & (sem.semana <= '2026-11-09')]
     OUT.mkdir(parents=True, exist_ok=True)
     filas = []

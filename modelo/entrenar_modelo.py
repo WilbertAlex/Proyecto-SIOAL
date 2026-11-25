@@ -31,6 +31,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt  # noqa: E402
 
 from src.datos_reales import agregar_semanal, leer_excels, limpiar  # noqa: E402
+from src.fuente import hay_excel  # noqa: E402
 from src.evaluacion import (INICIO_HISTORIAL, UMBRAL_WAPE_APP, evaluar_tramo,  # noqa: E402
                             intervalos_horizonte, particion_v2, seleccionar_modelo)
 from src.modelos import MODELOS_APP, alpha_optimo, pronostico_multipaso  # noqa: E402
@@ -73,14 +74,22 @@ def main():
     hoy = pd.Timestamp(args.hoy) if args.hoy else pd.Timestamp(date.today())
 
     # ---------------------------------------------------------------- 1-2. Datos
-    crudo, archivos = leer_excels(Path(args.datos))
-    if crudo.empty:
-        raise SystemExit(f'No hay Excel en {args.datos}')
-    df = limpiar(crudo)
-    semanal = agregar_semanal(df, 'excluir_regla_app')
+    if hay_excel(Path(args.datos)):
+        crudo, archivos = leer_excels(Path(args.datos))
+        df = limpiar(crudo)
+        semanal = agregar_semanal(df, 'excluir_regla_app')
+        origen_json = {'carpeta': Path(args.datos).name, 'archivos': [a['archivo'] for a in archivos],
+                       'manifiestos': int(len(df)), 'usados': int((~df.excluir_regla_app).sum()),
+                       'desde': f'{df.fecha.min():%Y-%m-%d}', 'hasta': f'{df.fecha.max():%Y-%m-%d}'}
+        fuente_txt = f'{len(archivos)} archivos · {len(df)} manifiestos · {int((~df.excluir_regla_app).sum())} usados'
+    else:   # sin los Excel de la empresa: totales anonimizados del repositorio
+        semanal = pd.read_csv(BASE / 'datos_publicos' / 'semanal.csv', parse_dates=['semana'])
+        origen_json = {'carpeta': 'datos_publicos', 'archivos': ['semanal.csv'],
+                       'desde': f'{semanal.semana.min():%Y-%m-%d}', 'hasta': f'{semanal.semana.max():%Y-%m-%d}'}
+        fuente_txt = 'datos_publicos/semanal.csv (sin Excel)'
     comp = semanal[semanal.semana_completa].reset_index(drop=True)
     n = len(comp)
-    print(f'[1] {len(archivos)} archivos · {len(df)} manifiestos · {int((~df.excluir_regla_app).sum())} usados '
+    print(f'[1] {fuente_txt} '
           f'· {n} semanas completas ({comp.semana[0]:%d-%m-%Y} a {comp.semana[n - 1]:%d-%m-%Y})')
 
     # ---------------------------------------------------------------- 3. Partición
@@ -99,9 +108,7 @@ def main():
 
     modelo_json = {
         'generado': datetime.now().isoformat(timespec='seconds'),
-        'origen': {'carpeta': str(Path(args.datos).resolve()), 'archivos': [a['archivo'] for a in archivos],
-                   'manifiestos': int(len(df)), 'usados': int((~df.excluir_regla_app).sum()),
-                   'desde': f'{df.fecha.min():%Y-%m-%d}', 'hasta': f'{df.fecha.max():%Y-%m-%d}'},
+        'origen': origen_json,
         'particion': p, 'regla_seleccion': 'menor MAE en validación; empate (< 2 %) → menor MAE en el historial',
         'variables': {}}
     filas_metricas, filas_pronostico = [], []
